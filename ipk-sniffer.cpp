@@ -19,7 +19,10 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 #define DEFAULT_NUM_PACKETS 1
+
 using namespace std;
+
+char errbuf[PCAP_ERRBUF_SIZE];
 
 typedef struct {
     string interface;
@@ -126,7 +129,6 @@ int main(int argc, char *argv[]) {
     if(args.interface.empty()) {
         pcap_if_t *alldevs, *device_list;
 
-        char errbuf[PCAP_ERRBUF_SIZE];
         if(pcap_findalldevs(&alldevs, errbuf) == -1) {
             error_exit("pcap_findalldevs");
         }
@@ -136,7 +138,17 @@ int main(int argc, char *argv[]) {
             printf("%s\n",(*device_list).name);
         }
         printf("\n");
+        exit(EXIT_SUCCESS);
     }
+
+    uint32_t netmask;
+    uint32_t ipsrc;
+
+    if(pcap_lookupnet(args.interface.c_str(), &ipsrc, &netmask, errbuf) == -1) {
+        error_exit("pcap_lookupnet");
+    }
+
+    
 
     exit(EXIT_SUCCESS);
 }
