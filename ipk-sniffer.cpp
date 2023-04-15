@@ -58,9 +58,10 @@ void usage() {
 
 int main(int argc, char *argv[]) {
     args_t args;
+    bool any_flag = false;
     int option_index = 0;
     int c;
-    while ((c = getopt_long(argc, argv, ":i:p:tu", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, ":i:p:tun:", long_options, &option_index)) != -1) {
         switch (c) {
             case 'i':
                 args.interface = optarg;
@@ -71,21 +72,31 @@ int main(int argc, char *argv[]) {
                 break;
             case 't':
                 args.tcp_flag = true;
+                any_flag = true;
                 break;
             case 'u':
                 args.udp_flag = true;
+                any_flag = true;
+                break;
+            case 'n':
+                args.num_packets = atoi(optarg);
                 break;
             case 0:
                 if (strcmp(long_options[option_index].name, "arp") == 0) {
                     args.arp_flag = true;
+                    any_flag = true;
                 } else if (strcmp(long_options[option_index].name, "icmp4") == 0) {
                     args.icmp4_flag = true;
+                    any_flag = true;
                 } else if (strcmp(long_options[option_index].name, "icmp6") == 0) {
                     args.icmp6_flag = true;
+                    any_flag = true;
                 } else if (strcmp(long_options[option_index].name, "igmp") == 0) {
                     args.igmp_flag = true;
+                    any_flag = true;
                 } else if (strcmp(long_options[option_index].name, "mld") == 0) {
                     args.mld_flag = true;
+                    any_flag = true;
                 }
                 break;
             default:
@@ -96,11 +107,22 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    if (any_flag == false) {
+        args.tcp_flag = true;
+        args.udp_flag = true;
+        args.arp_flag = true;
+        args.icmp4_flag = true;
+        args.icmp6_flag = true;
+        args.igmp_flag = true;
+        args.mld_flag = true;
+    }
+
     if(args.interface_flag == false) {
         usage();
         error_exit("No interface specified");
     }
 
+    //if interface has no argument
     if(args.interface.empty()) {
         pcap_if_t *alldevs, *device_list;
 
@@ -116,20 +138,6 @@ int main(int argc, char *argv[]) {
         printf("\n");
     }
 
-    // if (optind < argc && strcmp(argv[optind], "-n") == 0) {
-    //     if (optind + 1 >= argc) {
-    //         usage();
-    //         exit(1);
-    //     }
-    //     args.num_packets = atoi(argv[optind + 1]);
-    //     optind += 2;
-    // }
-
-    // Check for any remaining positional arguments
-    // if (optind < argc) {
-    //     usage();
-    //     exit(1);
-    // } 
     exit(EXIT_SUCCESS);
 }
 
