@@ -14,6 +14,7 @@
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <cstring>
+#include <cstdarg>
 
 
 #define EXIT_SUCCESS 0
@@ -50,13 +51,19 @@ struct option long_options[] = {
     {0, 0, 0, 0}
 };
 
-void error_exit(string error){
-    cerr << "ERROR: " << error << "!" <<  endl;
+void error_exit(const char *format, ... ){
+    va_list args;
+    va_start(args, format);
+    fprintf(stderr, "ERROR: ");
+    vfprintf(stderr, format, args);
+    fprintf(stderr, "!\n");
+    va_end(args);
     exit(EXIT_FAILURE);
 }
+    
 
 void usage() {
-    cout << "Usage: ./ipk-sniffer [-i interface | --interface interface] {-p port [--tcp|-t] [--udp|-u]} [--arp] [--icmp4] [--icmp6] [--igmp] [--mld] {-n num}" << endl;
+    cout << "Usage: './ipk-sniffer [-i interface | --interface interface] {-p port [--tcp|-t] [--udp|-u]} [--arp] [--icmp4] [--icmp6] [--igmp] [--mld] {-n num}'" << endl;
 }
 
 int main(int argc, char *argv[]) {
@@ -130,7 +137,7 @@ int main(int argc, char *argv[]) {
         pcap_if_t *alldevs, *device_list;
 
         if(pcap_findalldevs(&alldevs, errbuf) == -1) {
-            error_exit("pcap_findalldevs");
+            error_exit("pcap_findalldevs %s", errbuf);
         }
 
         printf("\n");
@@ -144,11 +151,16 @@ int main(int argc, char *argv[]) {
     uint32_t netmask;
     uint32_t ipsrc;
 
+    //get netmask and ip address of interface
     if(pcap_lookupnet(args.interface.c_str(), &ipsrc, &netmask, errbuf) == -1) {
-        error_exit("pcap_lookupnet");
+        error_exit("pcap_lookupnet %s", errbuf);
     }
 
-    
+    //open interface
+    // pcap_t *handle;
+    // if((handle = pcap_open_live(args.interface.c_str(), BUFSIZ, 1, 1000, errbuf)) == NULL) {
+    //     error_exit("pcap_open_live %s", errbuf);
+    // }
 
     exit(EXIT_SUCCESS);
 }
