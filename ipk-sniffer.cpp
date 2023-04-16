@@ -66,6 +66,50 @@ void usage() {
     cout << "Usage: './ipk-sniffer [-i interface | --interface interface] {-p port [--tcp|-t] [--udp|-u]} [--arp] [--icmp4] [--icmp6] [--igmp] [--mld] {-n num}'" << endl;
 }
 
+void add_filter(string *filter, string protocol){
+    if((*filter).empty() == false) {
+        *filter += " or ";
+    }
+    *filter += protocol;
+}
+
+string fetch_filter(args_t arg){
+    string filter = "";
+    if(arg.tcp_flag == true) {
+        if(arg.port != -1) {
+            filter += "(tcp port " + to_string(arg.port) + ")";
+        } else {
+            filter += "tcp";
+        }
+    }
+    if(arg.udp_flag == true) {
+        if(filter.empty() == false) {
+            filter += " or ";
+        }
+        if(arg.port != -1) {
+            filter += "(udp port " + to_string(arg.port) + ")";
+        } else {
+            filter += "udp";
+        }
+    }
+    if(arg.arp_flag == true) {
+        add_filter(&filter, "arp");
+    }
+    if(arg.icmp4_flag == true) {
+        add_filter(&filter, "icmp");
+    }
+    if(arg.icmp6_flag == true) {
+        add_filter(&filter, "icmp6");
+    }
+    if(arg.igmp_flag == true) {
+        add_filter(&filter, "igmp");
+    }
+    if(arg.mld_flag == true) {
+        add_filter(&filter, "mld");
+    }
+    return filter;
+}
+
 int main(int argc, char *argv[]) {
     args_t args;
     bool any_flag = false;
@@ -137,7 +181,7 @@ int main(int argc, char *argv[]) {
         pcap_if_t *alldevs, *device_list;
 
         if(pcap_findalldevs(&alldevs, errbuf) == -1) {
-            error_exit("pcap_findalldevs %s", errbuf);
+            error_exit("pcap_findalldevs: %s", errbuf);
         }
 
         printf("\n");
@@ -151,17 +195,23 @@ int main(int argc, char *argv[]) {
     uint32_t netmask;
     uint32_t ipsrc;
 
-    //get netmask and ip address of interface
+    // get netmask and ip address of interface
     if(pcap_lookupnet(args.interface.c_str(), &ipsrc, &netmask, errbuf) == -1) {
-        error_exit("pcap_lookupnet %s", errbuf);
+        error_exit("pcap_lookupnet: %s", errbuf);
     }
 
-    //open interface
-    // pcap_t *handle;
-    // if((handle = pcap_open_live(args.interface.c_str(), BUFSIZ, 1, 1000, errbuf)) == NULL) {
-    //     error_exit("pcap_open_live %s", errbuf);
-    // }
+    // open interface
+    pcap_t *handle;
+    if((handle = pcap_open_live(args.interface.c_str(), BUFSIZ, 1, 1000, errbuf)) == NULL) {
+        error_exit("pcap_open_live: %s", errbuf);
+    }
+    // check handle
+    if(pcap_datalink(handle) != DLT_EN10MB) {
+        error_exit("Interface %s is not Ethernet", args.interface.c_str());
+    }
 
+    string filter = fetch_filter(args);
+    
     exit(EXIT_SUCCESS);
 }
 
