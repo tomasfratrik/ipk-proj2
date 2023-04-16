@@ -13,9 +13,15 @@
 #include <netinet/ip_icmp.h>
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
+#include <netinet/udp.h>
 #include <cstring>
 #include <cstdarg>
 
+#define PROTO_TCP 6
+#define PROTO_UDP 17
+#define PROTO_ICMP 1
+#define PROTO_IGMP 2
+#define PROTO_ICMP6 58
 
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
@@ -108,6 +114,61 @@ string fetch_filter(args_t arg){
         add_filter(&filter, "mld");
     }
     return filter;
+}
+
+// void print_header(const struct pcap_pkthdr *header, struct ether_header *eth_header){
+//     // printf("timestamp: %")
+//     cout <<"timestamp: "<<header->ts<<endl;
+// }
+void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char *packet){
+    (void) args;
+    (void ) header;
+
+    struct ether_header *eth_header;
+    const struct tcphdr *tcp;
+    const struct tcphdr *udp;
+    struct ip *ip;
+    u_int size_ip;
+    u_int size_tcp;
+    u_int size_udp;
+
+    string ip_src;
+    string ip_dst;
+
+    eth_header = (struct ether_header *) packet;
+
+    switch(ntohs(eth_header->ether_type)){
+        case ETHERTYPE_IP:
+            ip = (struct ip*)(packet + sizeof(struct ether_header));
+            size_ip = ip->ip_hl*4;
+
+            if(size_ip < 20){
+                error_exit("Invalid IP header length: %u bytes", size_ip);
+            }
+
+            ip_src = inet_ntoa(ip->ip_src);
+            ip_dst = inet_ntoa(ip->ip_dst);
+            switch(ip->ip_p){
+                case PROTO_TCP:
+
+            }
+            // cout<< "ip src:" << ip_src << endl;
+            // cout<< "ip dst:" << ip_dst << endl;
+
+
+    }
+    /*
+    cout <<"Packet length: " << header->len << endl;
+    cout << "Captured length: " << header->caplen << endl;
+    cout << "Timestamp: " << header->ts.tv_sec << "." << header->ts.tv_usec << endl;
+    cout << "Ethernet header" << endl;
+    struct ether_header *eth_header = (struct ether_header *) packet;
+    cout << "Source MAC: " << ether_ntoa((struct ether_addr *) eth_header->ether_shost) << endl;
+    cout << "Destination MAC: " << ether_ntoa((struct ether_addr *) eth_header->ether_dhost) << endl;
+    cout << "Type: " << ntohs(eth_header->ether_type) << endl;
+    print src mac
+    */
+    
 }
 
 int main(int argc, char *argv[]) {
@@ -211,7 +272,20 @@ int main(int argc, char *argv[]) {
     }
 
     string filter = fetch_filter(args);
-    
+    struct bpf_program fp;	
+    if(pcap_compile(handle, &fp, filter.c_str(), 0, ipsrc) == -1) {
+        error_exit("pcap_compile");
+    }
+
+    if(pcap_setfilter(handle, &fp) == -1) {
+        error_exit("pcap_setfilter");
+    }
+
+    struct pcap_pkthdr header;
+    const u_char *packet;
+    pcap_loop(handle, args.num_packets, packet_sniffer, NULL);
+
+    pcap_close(handle);
     exit(EXIT_SUCCESS);
 }
 
