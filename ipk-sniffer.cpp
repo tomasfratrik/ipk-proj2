@@ -468,10 +468,6 @@ int main(int argc, char *argv[]) {
         std::exit(EXIT_SUCCESS);
     }
 
-    if(args.port < 0 || args.port > 65535) {
-        usage();
-        error_exit("Invalid port number");
-    }
     if(args.num_packets < 0) {
         usage();
         error_exit("Invalid number of packets");
