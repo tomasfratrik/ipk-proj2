@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <netinet/ether.h>
 #include <netinet/ip_icmp.h>
+#include <netinet/icmp6.h>
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
@@ -24,6 +25,10 @@
 #define PROTO_IGMP 2
 #define PROTO_ICMP6 58
 #define BYTES_ROW 16
+
+#define ICMPV6_MLD_QUERY 130
+#define ICMPV6_MLD_REPORT 131
+#define ICMPV6_MLD_DONE 132
 
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
@@ -85,7 +90,7 @@ string fetch_filter(args_t arg){
     string filter = "";
     if(arg.tcp_flag == true) {
         if(arg.port != -1) {
-            filter += "(tcp port " + to_string(arg.port) + ")";
+            filter += "(tcp and port " + to_string(arg.port) + ")";
         } else {
             filter += "tcp";
         }
@@ -95,7 +100,7 @@ string fetch_filter(args_t arg){
             filter += " or ";
         }
         if(arg.port != -1) {
-            filter += "(udp port " + to_string(arg.port) + ")";
+            filter += "(udp and port " + to_string(arg.port) + ")";
         } else {
             filter += "udp";
         }
@@ -113,7 +118,13 @@ string fetch_filter(args_t arg){
         add_filter(&filter, "igmp");
     }
     if(arg.mld_flag == true) {
-        add_filter(&filter, "mld");
+        // add_filter(&filter, "mld");
+        if(filter.empty() == false){
+            filter += " or ";
+        }
+        filter += "icmp6 and icmp6[0] == " + to_string(ICMPV6_MLD_QUERY);
+        filter += " or icmp6 and icmp6[0] == " + to_string(ICMPV6_MLD_REPORT);
+        filter += " or icmp6 and icmp6[0] == " + to_string(ICMPV6_MLD_DONE);
     }
     return filter;
 }
@@ -199,6 +210,7 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
     struct icmp *icmp;
     struct icmp6_hdr *icmp6;
     struct igmp *igmp;
+    struct mld_hdr *mld;
 
     u_int size_ip;
     u_int size_tcp;
@@ -307,6 +319,9 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
                 break;
             case PROTO_ICMP6:
                 icmp6 = (struct icmp6_hdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
+                //  if (icmp6->icmp6_type == ICMPV6_MLD_QUERY || icmp6->icmp6_type == ICMPV6_MLD_REPORT || icmp6->icmp6_type == ICMPV6_MLD_DONE) {
+                    // printf("MLD packet captured!\n");
+                // }
                 data = (u_char *)packet;
                 printf("\n");
                 data_print(data, header->caplen);
