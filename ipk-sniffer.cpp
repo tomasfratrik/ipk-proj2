@@ -175,7 +175,6 @@ void data_print(u_char *data, int len) {
         return;
     }
 
-    printf("\n");
     for (; i < len - BYTES_ROW; i += BYTES_ROW) {
         printf("0x%04x ", i);
 
@@ -231,7 +230,6 @@ void data_print(u_char *data, int len) {
         }
     }
 
-    printf("\n");
 }
 
 //close pcap handle on SIGINT
