@@ -181,7 +181,13 @@ void data_print(u_char *data, int len) {
 void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char *packet){
     (void) args;
     (void) header;
+    
+    char timestamp[30];
+    struct tm *local_time;
+    time_t raw_time = header->ts.tv_sec;
 
+    local_time = localtime(&raw_time);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S%z", local_time); 
     struct ether_header *eth_header;
     const struct tcphdr *tcp;
     const struct udphdr *udp;
@@ -216,15 +222,13 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
 
             inet_ntop(AF_INET, &(ip->ip_src), ip_src, INET_ADDRSTRLEN);
             inet_ntop(AF_INET, &(ip->ip_dst), ip_dst, INET_ADDRSTRLEN);
-            
-            // printf("timestamp: %s",);
+
+            printf("timestamp: %s%03ld\n", timestamp, header->ts.tv_usec / 1000);
             printf("src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_shost[0], eth_header->ether_shost[1], eth_header->ether_shost[2], eth_header->ether_shost[3], eth_header->ether_shost[4], eth_header->ether_shost[5]);
             printf("dst MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_dhost[0], eth_header->ether_dhost[1], eth_header->ether_dhost[2], eth_header->ether_dhost[3], eth_header->ether_dhost[4], eth_header->ether_dhost[5]);
             printf("frame length: %d bytes\n", header->len);
             printf("src IP: %s\n", ip_src);
             printf("dst IP: %s\n", ip_dst);
-            // printf("src port: %d\n", ntohs(tcp->th_sport));
-            // printf("dst port: %d\n", ntohs(tcp->th_dport));
 
             break;
 
@@ -255,6 +259,8 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
                     tcp = (struct tcphdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
                     size_tcp = tcp->th_off*4;
                 }
+                printf("src port: %d\n", ntohs(tcp->th_sport));
+                printf("dst port: %d\n", ntohs(tcp->th_dport));
                 data = (u_char *)packet;
                 printf("\n");
                 data_print(data, header->caplen);
@@ -270,6 +276,8 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
                     udp = (struct udphdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
                     size_udp = ntohs(udp->uh_ulen);
                 }
+                printf("src port: %d\n", ntohs(tcp->th_sport));
+                printf("dst port: %d\n", ntohs(tcp->th_dport));
                 data = (u_char *)packet;
                 printf("\n");
                 data_print(data, header->caplen);
