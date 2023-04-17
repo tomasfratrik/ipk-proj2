@@ -4,6 +4,7 @@
  */
 
 #include <iostream>
+#include <time.h>
 #include <getopt.h>
 #include <string>
 #include <time.h>
@@ -179,7 +180,7 @@ void data_print(u_char *data, int len) {
 
 void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char *packet){
     (void) args;
-    (void ) header;
+    (void) header;
 
     struct ether_header *eth_header;
     const struct tcphdr *tcp;
@@ -215,9 +216,16 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
 
             inet_ntop(AF_INET, &(ip->ip_src), ip_src, INET_ADDRSTRLEN);
             inet_ntop(AF_INET, &(ip->ip_dst), ip_dst, INET_ADDRSTRLEN);
+            
+            // printf("timestamp: %s",);
+            printf("src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_shost[0], eth_header->ether_shost[1], eth_header->ether_shost[2], eth_header->ether_shost[3], eth_header->ether_shost[4], eth_header->ether_shost[5]);
+            printf("dst MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_dhost[0], eth_header->ether_dhost[1], eth_header->ether_dhost[2], eth_header->ether_dhost[3], eth_header->ether_dhost[4], eth_header->ether_dhost[5]);
+            printf("frame length: %d bytes\n", header->len);
+            printf("src IP: %s\n", ip_src);
+            printf("dst IP: %s\n", ip_dst);
+            // printf("src port: %d\n", ntohs(tcp->th_sport));
+            // printf("dst port: %d\n", ntohs(tcp->th_dport));
 
-            printf("ip src: %s\n",ip_src);
-            printf("ip dst: %s\n",ip_dst);
             break;
 
         case ETHERTYPE_IPV6: // IPv6
@@ -233,7 +241,6 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
 
             //protocol
             next_hdr = ip6->ip6_nxt;
-
             break;
     }
 
@@ -270,11 +277,6 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
                 break;
         }
     }
-    cout<< "ip src:" << ip_src << endl;
-    cout<< "ip dst:" << ip_dst << endl;
-    cout<< "tcp src port:" << ntohs(tcp->th_sport) << endl;
-    cout<< "tcp dst port:" << ntohs(tcp->th_dport) << endl;
-    
 }
 
 int main(int argc, char *argv[]) {
