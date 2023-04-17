@@ -26,7 +26,8 @@ The ipk-sniffer program is used to capture and display network traffic on a spec
 ## **Tests**
 - for testing, I used 'wireshark' and 'tcpreplay'.
 - `tcpreplay` allowed me to send packets to the interface and then I could see the output of the program. (but I didn't find NDP and MLD packets so those are not tested)
-- all of those tests match with wiresharks output
+- `tcpreplay` uses packets which are in the folder `test_packets`
+- all tests match with wiresharks output
 
 ### **Test 1 - tcp IPv4**
 #### **wireshark**
