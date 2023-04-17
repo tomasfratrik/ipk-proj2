@@ -196,6 +196,9 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
     struct ip *ip;
     struct ip6_hdr *ip6;
     struct arp_hdr *arp;
+    struct icmp *icmp;
+    struct icmp6_hdr *icmp6;
+    struct igmp *igmp;
 
     u_int size_ip;
     u_int size_tcp;
@@ -253,8 +256,6 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
             printf("src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_shost[0], eth_header->ether_shost[1], eth_header->ether_shost[2], eth_header->ether_shost[3], eth_header->ether_shost[4], eth_header->ether_shost[5]);
             printf("dst MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_dhost[0], eth_header->ether_dhost[1], eth_header->ether_dhost[2], eth_header->ether_dhost[3], eth_header->ether_dhost[4], eth_header->ether_dhost[5]);
             printf("frame length: %d bytes\n", header->len);
-            // printf("src IP: %s\n", ip_src);
-            // printf("dst IP: %s\n", ip_dst);
             data = (u_char *)packet;
             printf("\n");
             data_print(data, header->caplen);
@@ -290,8 +291,29 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
                     udp = (struct udphdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
                     size_udp = ntohs(udp->uh_ulen);
                 }
-                printf("src port: %d\n", ntohs(tcp->th_sport));
-                printf("dst port: %d\n", ntohs(tcp->th_dport));
+                printf("src port: %d\n", ntohs(udp->uh_sport));
+                printf("dst port: %d\n", ntohs(udp->uh_dport));
+                data = (u_char *)packet;
+                printf("\n");
+                data_print(data, header->caplen);
+                printf("\n");
+                break;
+            case PROTO_ICMP:
+                icmp = (struct icmp*)(packet + sizeof(struct ether_header) + size_ip);
+                data = (u_char *)packet;
+                printf("\n");
+                data_print(data, header->caplen);
+                printf("\n");
+                break;
+            case PROTO_ICMP6:
+                icmp6 = (struct icmp6_hdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
+                data = (u_char *)packet;
+                printf("\n");
+                data_print(data, header->caplen);
+                printf("\n");
+                break;
+            case PROTO_IGMP:
+                igmp = (struct igmp*)(packet + sizeof(struct ether_header) + size_ip);
                 data = (u_char *)packet;
                 printf("\n");
                 data_print(data, header->caplen);
