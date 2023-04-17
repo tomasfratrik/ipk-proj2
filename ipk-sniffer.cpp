@@ -188,11 +188,14 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
 
     local_time = localtime(&raw_time);
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S%z", local_time); 
+    printf("timestamp: %s%03ld\n", timestamp, header->ts.tv_usec / 1000);
+
     struct ether_header *eth_header;
     const struct tcphdr *tcp;
     const struct udphdr *udp;
     struct ip *ip;
     struct ip6_hdr *ip6;
+    struct arp_hdr *arp;
 
     u_int size_ip;
     u_int size_tcp;
@@ -223,7 +226,6 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
             inet_ntop(AF_INET, &(ip->ip_src), ip_src, INET_ADDRSTRLEN);
             inet_ntop(AF_INET, &(ip->ip_dst), ip_dst, INET_ADDRSTRLEN);
 
-            printf("timestamp: %s%03ld\n", timestamp, header->ts.tv_usec / 1000);
             printf("src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_shost[0], eth_header->ether_shost[1], eth_header->ether_shost[2], eth_header->ether_shost[3], eth_header->ether_shost[4], eth_header->ether_shost[5]);
             printf("dst MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_dhost[0], eth_header->ether_dhost[1], eth_header->ether_dhost[2], eth_header->ether_dhost[3], eth_header->ether_dhost[4], eth_header->ether_dhost[5]);
             printf("frame length: %d bytes\n", header->len);
@@ -245,6 +247,18 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
 
             //protocol
             next_hdr = ip6->ip6_nxt;
+            break;
+        case ETHERTYPE_ARP:
+            arp = (struct arp_hdr *)(packet + sizeof(struct ether_header));
+            printf("src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_shost[0], eth_header->ether_shost[1], eth_header->ether_shost[2], eth_header->ether_shost[3], eth_header->ether_shost[4], eth_header->ether_shost[5]);
+            printf("dst MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_dhost[0], eth_header->ether_dhost[1], eth_header->ether_dhost[2], eth_header->ether_dhost[3], eth_header->ether_dhost[4], eth_header->ether_dhost[5]);
+            printf("frame length: %d bytes\n", header->len);
+            // printf("src IP: %s\n", ip_src);
+            // printf("dst IP: %s\n", ip_dst);
+            data = (u_char *)packet;
+            printf("\n");
+            data_print(data, header->caplen);
+            printf("\n");
             break;
     }
 
