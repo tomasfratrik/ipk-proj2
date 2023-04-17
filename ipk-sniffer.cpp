@@ -18,6 +18,7 @@
 #include <netinet/udp.h>
 #include <cstring>
 #include <cstdarg>
+#include <csignal>
 
 #define PROTO_TCP 6
 #define PROTO_UDP 17
@@ -30,6 +31,12 @@
 #define ICMPV6_MLD_REPORT 131
 #define ICMPV6_MLD_DONE 132
 
+#define ICMPV6_NDP_ROUTER 134
+#define ICMPV6_NDP_NEIGHBOR 135
+#define ICMPV6_NDP_NEIGHBOR2 135
+#define ICMPV6_NDP_REDIRECT 137
+
+
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 #define DEFAULT_NUM_PACKETS 1
@@ -37,7 +44,9 @@
 using namespace std;
 
 char errbuf[PCAP_ERRBUF_SIZE];
+pcap_t *handle;
 
+// Structure for arguments
 typedef struct {
     string interface;
     bool interface_flag = false;
@@ -49,9 +58,11 @@ typedef struct {
     bool icmp6_flag = false;
     bool igmp_flag = false;
     bool mld_flag = false;
+    bool ndp_flag = false;
     int num_packets = DEFAULT_NUM_PACKETS;
 } args_t;
 
+// used by getopt_long
 struct option long_options[] = {
     {"interface", required_argument, 0, 'i'},
     {"tcp", no_argument, 0, 't'},
@@ -61,9 +72,11 @@ struct option long_options[] = {
     {"icmp6", no_argument, 0, 0},
     {"igmp", no_argument, 0, 0},
     {"mld", no_argument, 0, 0},
+    {"ndp", no_argument, 0,0},
     {0, 0, 0, 0}
 };
 
+// exit on error, with dynamic number of strings
 void error_exit(const char *format, ... ){
     va_list args;
     va_start(args, format);
@@ -74,11 +87,14 @@ void error_exit(const char *format, ... ){
     std::exit(EXIT_FAILURE);
 }
     
-
+// print usage of program
 void usage() {
     cout << "Usage: './ipk-sniffer [-i interface | --interface interface] {-p port [--tcp|-t] [--udp|-u]} [--arp] [--icmp4] [--icmp6] [--igmp] [--mld] {-n num}'" << endl;
 }
 
+//help function for fetch_filter
+//filter -> current filter string
+//protocol -> protocol to add to filter
 void add_filter(string *filter, string protocol){
     if((*filter).empty() == false) {
         *filter += " or ";
@@ -86,6 +102,7 @@ void add_filter(string *filter, string protocol){
     *filter += protocol;
 }
 
+// fetch filter string from arguments
 string fetch_filter(args_t arg){
     string filter = "";
     if(arg.tcp_flag == true) {
@@ -126,9 +143,20 @@ string fetch_filter(args_t arg){
         filter += " or icmp6 and icmp6[0] == " + to_string(ICMPV6_MLD_REPORT);
         filter += " or icmp6 and icmp6[0] == " + to_string(ICMPV6_MLD_DONE);
     }
+    if(arg.ndp_flag == true){
+        if(filter.empty() == false){
+            filter += " or ";
+        }
+        filter += "icmp6 and icmp6[0] == " + to_string(ICMPV6_NDP_ROUTER);
+        filter += " or icmp6 and icmp6[0] == " + to_string(ICMPV6_NDP_NEIGHBOR);
+        filter += " or icmp6 and icmp6[0] == " + to_string(ICMPV6_NDP_NEIGHBOR2);
+        filter += " or icmp6 and icmp6[0] == " + to_string(ICMPV6_NDP_REDIRECT);
+    }
     return filter;
 }
 
+// print data in hex and ascii
+//len -> length of data
 void data_print(u_char *data, int len) {
     int i = 0;
 
@@ -144,6 +172,9 @@ void data_print(u_char *data, int len) {
         printf(" ");
         for (int j = i; j < BYTES_ROW + i; j++) {
             printf("%02x ", data[j]);
+            if (j % 16 == 7) {
+                printf(" ");
+            }
         }
 
         // Print ASCII values
@@ -154,10 +185,14 @@ void data_print(u_char *data, int len) {
             } else {
                 printf(".");
             }
+            if (j % 16 == 7) {
+                printf(" ");
+            }
         }
 
         printf("\n");
     }
+    //rest
 
     printf("0x%04x ", i);
 
@@ -165,6 +200,9 @@ void data_print(u_char *data, int len) {
     printf(" ");
     for (int j = i; j < len; j++) {
         printf("%02x ", data[j]);
+        if (j % 16 == 7) {
+            printf(" ");
+        }
     }
 
     // Fill empty 
@@ -172,6 +210,9 @@ void data_print(u_char *data, int len) {
     if (rest == BYTES_ROW) rest = 0;
     for (int j = 0; j < rest; j++) {
         printf("   ");
+        if ((j + i) % 16 == 7) {
+            printf(" ");
+        }
     }
 
     // ASCII values
@@ -182,16 +223,29 @@ void data_print(u_char *data, int len) {
         } else {
             printf(".");
         }
+        if (j % 16 == 7) {
+            printf(" ");
+        }
     }
 
     printf("\n");
 }
 
+//close pcap handle on SIGINT
+void sigint_handler(int signum) {
+    std::cout << "Caught SIGINT, closing pcap handle..." << std::endl;
+    pcap_close(handle);
+    exit(signum);
+}
 
-
+//callback function for pcap_loop
+//prints timestamp, source and destination MAC address, source and destination IP address, source and destination port, protocol and data
+//source: https://www.tcpdump.org/pcap.html
+//author: Tim Carstens &  Guy Harris
 void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char *packet){
-    (void) args;
-    (void) header;
+    (void)args;
+    (void)header;
+    signal(SIGINT, sigint_handler);
     
     char timestamp[30];
     struct tm *local_time;
@@ -206,21 +260,14 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
     const struct udphdr *udp;
     struct ip *ip;
     struct ip6_hdr *ip6;
-    struct arp_hdr *arp;
-    struct icmp *icmp;
-    struct icmp6_hdr *icmp6;
-    struct igmp *igmp;
-    struct mld_hdr *mld;
-
     u_int size_ip;
-    u_int size_tcp;
-    u_int size_udp;
 
     u_char *data;
 
     string ip_src;
     string ip_dst;
 
+    //ethernet header
     eth_header = (struct ether_header *) packet;
 
     bool is_ipv4 = false;
@@ -259,12 +306,16 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
 
             inet_ntop(AF_INET6, &(ip6->ip6_src), ip6_src, INET6_ADDRSTRLEN);
             inet_ntop(AF_INET6, &(ip6->ip6_dst), ip6_dst, INET6_ADDRSTRLEN);
+            printf("src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_shost[0], eth_header->ether_shost[1], eth_header->ether_shost[2], eth_header->ether_shost[3], eth_header->ether_shost[4], eth_header->ether_shost[5]);
+            printf("dst MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_dhost[0], eth_header->ether_dhost[1], eth_header->ether_dhost[2], eth_header->ether_dhost[3], eth_header->ether_dhost[4], eth_header->ether_dhost[5]);
+            printf("frame length: %d bytes\n", header->len);
+            printf("src IP: %s\n", ip6_src);
+            printf("dst IP: %s\n", ip6_dst);
 
             //protocol
             next_hdr = ip6->ip6_nxt;
             break;
         case ETHERTYPE_ARP:
-            arp = (struct arp_hdr *)(packet + sizeof(struct ether_header));
             printf("src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_shost[0], eth_header->ether_shost[1], eth_header->ether_shost[2], eth_header->ether_shost[3], eth_header->ether_shost[4], eth_header->ether_shost[5]);
             printf("dst MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_header->ether_dhost[0], eth_header->ether_dhost[1], eth_header->ether_dhost[2], eth_header->ether_dhost[3], eth_header->ether_dhost[4], eth_header->ether_dhost[5]);
             printf("frame length: %d bytes\n", header->len);
@@ -280,11 +331,9 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
             case PROTO_TCP:
                 if(is_ipv4){
                     tcp = (struct tcphdr*)(packet + sizeof(struct ether_header) + size_ip);
-                    size_tcp = tcp->th_off*4;
                 }
                 else{ // IPv6
                     tcp = (struct tcphdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
-                    size_tcp = tcp->th_off*4;
                 }
                 printf("src port: %d\n", ntohs(tcp->th_sport));
                 printf("dst port: %d\n", ntohs(tcp->th_dport));
@@ -297,11 +346,9 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
             case PROTO_UDP:
                 if(is_ipv4){
                     udp = (struct udphdr*)(packet + sizeof(struct ether_header) + size_ip);
-                    size_udp = udp->uh_ulen;
                 }
                 else{
                     udp = (struct udphdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
-                    size_udp = ntohs(udp->uh_ulen);
                 }
                 printf("src port: %d\n", ntohs(udp->uh_sport));
                 printf("dst port: %d\n", ntohs(udp->uh_dport));
@@ -311,24 +358,18 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
                 printf("\n");
                 break;
             case PROTO_ICMP:
-                icmp = (struct icmp*)(packet + sizeof(struct ether_header) + size_ip);
                 data = (u_char *)packet;
                 printf("\n");
                 data_print(data, header->caplen);
                 printf("\n");
                 break;
             case PROTO_ICMP6:
-                icmp6 = (struct icmp6_hdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
-                //  if (icmp6->icmp6_type == ICMPV6_MLD_QUERY || icmp6->icmp6_type == ICMPV6_MLD_REPORT || icmp6->icmp6_type == ICMPV6_MLD_DONE) {
-                    // printf("MLD packet captured!\n");
-                // }
                 data = (u_char *)packet;
                 printf("\n");
                 data_print(data, header->caplen);
                 printf("\n");
                 break;
             case PROTO_IGMP:
-                igmp = (struct igmp*)(packet + sizeof(struct ether_header) + size_ip);
                 data = (u_char *)packet;
                 printf("\n");
                 data_print(data, header->caplen);
@@ -343,6 +384,8 @@ int main(int argc, char *argv[]) {
     bool any_flag = false;
     int option_index = 0;
     int c;
+
+    //parse arguments
     while ((c = getopt_long(argc, argv, ":i:p:tun:", long_options, &option_index)) != -1) {
         switch (c) {
             case 'i':
@@ -367,17 +410,25 @@ int main(int argc, char *argv[]) {
                 if (strcmp(long_options[option_index].name, "arp") == 0) {
                     args.arp_flag = true;
                     any_flag = true;
-                } else if (strcmp(long_options[option_index].name, "icmp4") == 0) {
+                } 
+                else if (strcmp(long_options[option_index].name, "icmp4") == 0) {
                     args.icmp4_flag = true;
                     any_flag = true;
-                } else if (strcmp(long_options[option_index].name, "icmp6") == 0) {
+                } 
+                else if (strcmp(long_options[option_index].name, "icmp6") == 0) {
                     args.icmp6_flag = true;
                     any_flag = true;
-                } else if (strcmp(long_options[option_index].name, "igmp") == 0) {
+                } 
+                else if (strcmp(long_options[option_index].name, "igmp") == 0) {
                     args.igmp_flag = true;
                     any_flag = true;
-                } else if (strcmp(long_options[option_index].name, "mld") == 0) {
+                } 
+                else if (strcmp(long_options[option_index].name, "mld") == 0) {
                     args.mld_flag = true;
+                    any_flag = true;
+                }
+                else if (strcmp(long_options[option_index].name, "ndp") == 0) {
+                    args.ndp_flag = true;
                     any_flag = true;
                 }
                 break;
@@ -389,6 +440,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    //if any flag is not set, set all flags
     if (any_flag == false) {
         args.tcp_flag = true;
         args.udp_flag = true;
@@ -399,13 +451,8 @@ int main(int argc, char *argv[]) {
         args.mld_flag = true;
     }
 
-    if(args.interface_flag == false) {
-        usage();
-        error_exit("No interface specified");
-    }
-
     //if interface has no argument
-    if(args.interface.empty()) {
+    if(args.interface.empty() || args.interface_flag == false) {
         pcap_if_t *alldevs, *device_list;
 
         if(pcap_findalldevs(&alldevs, errbuf) == -1) {
@@ -438,21 +485,22 @@ int main(int argc, char *argv[]) {
         error_exit("Interface %s is not Ethernet", args.interface.c_str());
     }
 
+    // set filter
     string filter = fetch_filter(args);
     struct bpf_program fp;	
     if(pcap_compile(handle, &fp, filter.c_str(), 0, ipsrc) == -1) {
         error_exit("pcap_compile");
     }
-
     if(pcap_setfilter(handle, &fp) == -1) {
         error_exit("pcap_setfilter");
     }
 
+    // start sniffing
     struct pcap_pkthdr header;
     const u_char *packet;
     pcap_loop(handle, args.num_packets, packet_sniffer, NULL);
 
+    // close handle
     pcap_close(handle);
     std::exit(EXIT_SUCCESS);
 }
-
