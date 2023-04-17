@@ -358,6 +358,7 @@ void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char
                 data_print(data, header->caplen);
                 printf("\n");
                 break;
+            //repetitive for possible future use
             case PROTO_ICMP:
                 data = (u_char *)packet;
                 printf("\n");

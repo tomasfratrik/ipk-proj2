@@ -1,5 +1,5 @@
 # Makefile for ipk-sniffer
-# author: 	Tomáš Frátrik
+# author: Tomáš Frátrik (xfratr01)
 
 CC=g++
 CFLAGS= -std=c++2a -g
