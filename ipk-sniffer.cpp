@@ -90,6 +90,17 @@ void error_exit(const char *format, ... ){
 // print usage of program
 void usage() {
     cout << "Usage: './ipk-sniffer [-i interface | --interface interface] {-p port [--tcp|-t] [--udp|-u]} [--arp] [--icmp4] [--icmp6] [--igmp] [--mld] {-n num}'" << endl;
+    cout << "Options:" << endl;
+    cout << "\t-i, --interface interface: specify interface to sniff (default: print list of active interfaces)" << endl;
+    cout << "\t-p port: filter by TCP/UDP port number" << endl;
+    cout << "\t-t, --tcp: display TCP segments" << endl;
+    cout << "\t-u, --udp: display UDP datagrams" << endl;
+    cout << "\t--arp: display only ARP frames" << endl;
+    cout << "\t--icmp4: display only ICMPv4 packets" << endl;
+    cout << "\t--icmp6: display only ICMPv6 echo request/response" << endl;
+    cout << "\t--igmp: display only IGMP packets" << endl;
+    cout << "\t--mld: display only MLD packets" << endl;
+    cout << "\t-n num: number of packets to display (default: 1)" << endl;
 }
 
 //help function for fetch_filter
@@ -172,9 +183,6 @@ void data_print(u_char *data, int len) {
         printf(" ");
         for (int j = i; j < BYTES_ROW + i; j++) {
             printf("%02x ", data[j]);
-            if (j % 16 == 7) {
-                printf(" ");
-            }
         }
 
         // Print ASCII values
@@ -192,7 +200,8 @@ void data_print(u_char *data, int len) {
 
         printf("\n");
     }
-    //rest
+
+    // Print last row
 
     printf("0x%04x ", i);
 
@@ -200,19 +209,13 @@ void data_print(u_char *data, int len) {
     printf(" ");
     for (int j = i; j < len; j++) {
         printf("%02x ", data[j]);
-        if (j % 16 == 7) {
-            printf(" ");
-        }
     }
 
-    // Fill empty 
+    // Fill empty  with spaces
     int rest = BYTES_ROW - (len - i) % BYTES_ROW;
     if (rest == BYTES_ROW) rest = 0;
     for (int j = 0; j < rest; j++) {
         printf("   ");
-        if ((j + i) % 16 == 7) {
-            printf(" ");
-        }
     }
 
     // ASCII values
@@ -466,6 +469,21 @@ int main(int argc, char *argv[]) {
         printf("\n");
         std::exit(EXIT_SUCCESS);
     }
+
+    if(args.port < 0 || args.port > 65535) {
+        usage();
+        error_exit("Invalid port number");
+    }
+    if(args.num_packets < 0) {
+        usage();
+        error_exit("Invalid number of packets");
+    }
+    if(args.port != -1 && args.tcp_flag == false && args.udp_flag == false) {
+        usage();
+        error_exit("Port number is specified but neither TCP nor UDP is specified");
+    }
+
+    
 
     uint32_t netmask;
     uint32_t ipsrc;
