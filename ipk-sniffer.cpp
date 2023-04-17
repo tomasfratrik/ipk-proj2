@@ -22,6 +22,7 @@
 #define PROTO_ICMP 1
 #define PROTO_IGMP 2
 #define PROTO_ICMP6 58
+#define BYTES_ROW 16
 
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
@@ -64,7 +65,7 @@ void error_exit(const char *format, ... ){
     vfprintf(stderr, format, args);
     fprintf(stderr, "!\n");
     va_end(args);
-    exit(EXIT_FAILURE);
+    std::exit(EXIT_FAILURE);
 }
     
 
@@ -116,58 +117,163 @@ string fetch_filter(args_t arg){
     return filter;
 }
 
-// void print_header(const struct pcap_pkthdr *header, struct ether_header *eth_header){
-//     // printf("timestamp: %")
-//     cout <<"timestamp: "<<header->ts<<endl;
-// }
+void data_print(u_char *data, int len) {
+    int i = 0;
+
+    if (len == 0) {
+        return;
+    }
+
+    printf("\n");
+    for (; i < len - BYTES_ROW; i += BYTES_ROW) {
+        printf("0x%04x ", i);
+
+        // Print hex values
+        printf(" ");
+        for (int j = i; j < BYTES_ROW + i; j++) {
+            printf("%02x ", data[j]);
+        }
+
+        // Print ASCII values
+        printf(" ");
+        for (int j = i; j < BYTES_ROW + i; j++) {
+            if (isprint(data[j])) {
+                printf("%c", data[j]);
+            } else {
+                printf(".");
+            }
+        }
+
+        printf("\n");
+    }
+
+    printf("0x%04x ", i);
+
+    // Print hex values
+    printf(" ");
+    for (int j = i; j < len; j++) {
+        printf("%02x ", data[j]);
+    }
+
+    // Fill empty 
+    int rest = BYTES_ROW - (len - i) % BYTES_ROW;
+    if (rest == BYTES_ROW) rest = 0;
+    for (int j = 0; j < rest; j++) {
+        printf("   ");
+    }
+
+    // ASCII values
+    printf(" ");
+    for (int j = i; j < len; j++) {
+        if (isprint(data[j])) {
+            printf("%c", data[j]); //if printable 
+        } else {
+            printf(".");
+        }
+    }
+
+    printf("\n");
+}
+
+
+
 void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char *packet){
     (void) args;
     (void ) header;
 
     struct ether_header *eth_header;
     const struct tcphdr *tcp;
-    const struct tcphdr *udp;
+    const struct udphdr *udp;
     struct ip *ip;
+    struct ip6_hdr *ip6;
+
     u_int size_ip;
     u_int size_tcp;
     u_int size_udp;
+
+    u_char *data;
 
     string ip_src;
     string ip_dst;
 
     eth_header = (struct ether_header *) packet;
 
+    bool is_ipv4 = false;
+    bool is_ipv6 = false;
+
+    u_int8_t next_hdr;
+
     switch(ntohs(eth_header->ether_type)){
-        case ETHERTYPE_IP:
+        case ETHERTYPE_IP: // IPv4
+            is_ipv4 = true;
+
             ip = (struct ip*)(packet + sizeof(struct ether_header));
             size_ip = ip->ip_hl*4;
 
-            if(size_ip < 20){
-                error_exit("Invalid IP header length: %u bytes", size_ip);
-            }
+            char ip_src[INET_ADDRSTRLEN];
+            char ip_dst[INET_ADDRSTRLEN];
 
-            ip_src = inet_ntoa(ip->ip_src);
-            ip_dst = inet_ntoa(ip->ip_dst);
-            switch(ip->ip_p){
-                case PROTO_TCP:
+            inet_ntop(AF_INET, &(ip->ip_src), ip_src, INET_ADDRSTRLEN);
+            inet_ntop(AF_INET, &(ip->ip_dst), ip_dst, INET_ADDRSTRLEN);
 
-            }
-            // cout<< "ip src:" << ip_src << endl;
-            // cout<< "ip dst:" << ip_dst << endl;
+            printf("ip src: %s\n",ip_src);
+            printf("ip dst: %s\n",ip_dst);
+            break;
 
+        case ETHERTYPE_IPV6: // IPv6
+            is_ipv6 = true;
 
+            ip6 = (struct ip6_hdr*)(packet + sizeof(struct ether_header));
+
+            char ip6_src[INET6_ADDRSTRLEN];
+            char ip6_dst[INET6_ADDRSTRLEN];
+
+            inet_ntop(AF_INET6, &(ip6->ip6_src), ip6_src, INET6_ADDRSTRLEN);
+            inet_ntop(AF_INET6, &(ip6->ip6_dst), ip6_dst, INET6_ADDRSTRLEN);
+
+            //protocol
+            next_hdr = ip6->ip6_nxt;
+
+            break;
     }
-    /*
-    cout <<"Packet length: " << header->len << endl;
-    cout << "Captured length: " << header->caplen << endl;
-    cout << "Timestamp: " << header->ts.tv_sec << "." << header->ts.tv_usec << endl;
-    cout << "Ethernet header" << endl;
-    struct ether_header *eth_header = (struct ether_header *) packet;
-    cout << "Source MAC: " << ether_ntoa((struct ether_addr *) eth_header->ether_shost) << endl;
-    cout << "Destination MAC: " << ether_ntoa((struct ether_addr *) eth_header->ether_dhost) << endl;
-    cout << "Type: " << ntohs(eth_header->ether_type) << endl;
-    print src mac
-    */
+
+    if(is_ipv4 or is_ipv6){
+        switch(is_ipv4 ? ip->ip_p : next_hdr){
+            case PROTO_TCP:
+                if(is_ipv4){
+                    tcp = (struct tcphdr*)(packet + sizeof(struct ether_header) + size_ip);
+                    size_tcp = tcp->th_off*4;
+                }
+                else{ // IPv6
+                    tcp = (struct tcphdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
+                    size_tcp = tcp->th_off*4;
+                }
+                data = (u_char *)packet;
+                printf("\n");
+                data_print(data, header->caplen);
+                printf("\n");
+                break;
+
+            case PROTO_UDP:
+                if(is_ipv4){
+                    udp = (struct udphdr*)(packet + sizeof(struct ether_header) + size_ip);
+                    size_udp = udp->uh_ulen;
+                }
+                else{
+                    udp = (struct udphdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
+                    size_udp = ntohs(udp->uh_ulen);
+                }
+                data = (u_char *)packet;
+                printf("\n");
+                data_print(data, header->caplen);
+                printf("\n");
+                break;
+        }
+    }
+    cout<< "ip src:" << ip_src << endl;
+    cout<< "ip dst:" << ip_dst << endl;
+    cout<< "tcp src port:" << ntohs(tcp->th_sport) << endl;
+    cout<< "tcp dst port:" << ntohs(tcp->th_dport) << endl;
     
 }
 
@@ -250,7 +356,7 @@ int main(int argc, char *argv[]) {
             printf("%s\n",(*device_list).name);
         }
         printf("\n");
-        exit(EXIT_SUCCESS);
+        std::exit(EXIT_SUCCESS);
     }
 
     uint32_t netmask;
@@ -286,6 +392,6 @@ int main(int argc, char *argv[]) {
     pcap_loop(handle, args.num_packets, packet_sniffer, NULL);
 
     pcap_close(handle);
-    exit(EXIT_SUCCESS);
+    std::exit(EXIT_SUCCESS);
 }
 
