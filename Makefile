@@ -2,7 +2,7 @@
 # author: 	Tomáš Frátrik
 
 CC=g++
-CFLAGS= -Wall -std=c++2a -g
+CFLAGS= -std=c++2a -g
 
 all: sniffer
 

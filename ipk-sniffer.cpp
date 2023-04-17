@@ -246,8 +246,6 @@ void sigint_handler(int signum) {
 //source: https://www.tcpdump.org/pcap.html
 //author: Tim Carstens &  Guy Harris
 void packet_sniffer(u_char *args, const struct pcap_pkthdr *header, const u_char *packet){
-    (void)args;
-    (void)header;
     signal(SIGINT, sigint_handler);
     
     char timestamp[30];
@@ -482,8 +480,6 @@ int main(int argc, char *argv[]) {
         usage();
         error_exit("Port number is specified but neither TCP nor UDP is specified");
     }
-
-    
 
     uint32_t netmask;
     uint32_t ipsrc;
